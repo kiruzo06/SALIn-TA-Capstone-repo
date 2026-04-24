@@ -528,49 +528,195 @@
         <div id="toast" class="toast">Copied to clipboard!</div>
     </div>
 
+    
     <script>
-        // --- DATA ---
-        const LANGUAGES = ["Tagalog", "Cebuano", "Ilocano", "Hiligaynon", "Bicolano"];
-        const CODES = { "Tagalog": "TAG", "Cebuano": "CEB", "Ilocano": "ILO", "Hiligaynon": "HIL", "Bicolano": "BIC" };
-        const SLANGS = [
-            { w: "LODI", m: "Idol", d: "Reverse of 'Idol'. Used for someone you look up to." },
-            { w: "PETMALU", m: "Amazing", d: "Reverse of 'Malupit'. Describes something extreme." },
-            { w: "WERPA", m: "Power", d: "Reverse of 'Power'. Used for support." },
-            { w: "MUMSHIE", m: "Mom/Friend", d: "Endearment for a mother or close friend." },
-            { w: "SANA ALL", m: "Wish for all", d: "Wishing a good situation happens to everyone." }
-        ];
+       // --- DATA CONFIG ---
+        const LANGUAGES = ["English", "Tagalog", "Cebuano", "Ilocano", "Hiligaynon", "Bicolano", "Waray", "Kapampangan", "Pangasinan"];
+        const CODES = { "English": "ENG", "Tagalog": "TAG", "Cebuano": "CEB", "Ilocano": "ILO", "Hiligaynon": "HIL", "Bicolano": "BIC", "Waray": "WAR", "Kapampangan": "KAP", "Pangasinan": "PAN" };
+        const VOICE_MAP = { "English": "en-US", "Tagalog": "fil-PH", "Cebuano": "fil-PH", "Ilocano": "fil-PH", "Hiligaynon": "fil-PH", "Bicolano": "fil-PH", "Waray": "fil-PH", "Kapampangan": "fil-PH", "Pangasinan": "fil-PH" };
 
-        // --- APP STATE ---
         let isDark = localStorage.getItem('salinta-theme-flag') === 'dark';
-        let transTimer = null;
 
-        // --- CORE LOGIC ---
         function init() {
             lucide.createIcons();
             populateSelects();
-            renderSlangs();
             applyTheme();
-
-            // Translation Event
-            document.getElementById('main-input').addEventListener('input', handleInput);
-            
-            // Volume Slider Event
-            document.getElementById('vol-slider').oninput = function() {
-                document.getElementById('vol-txt').innerText = this.value + "%";
-            };
-
-            // Sync conversation tags
-            ['conv-s-lang', 'conv-t-lang'].forEach(id => {
-                document.getElementById(id).onchange = syncTags;
-            });
+            document.getElementById('main-input').addEventListener('input', handleDashboardTranslate);
+            ['conv-s-lang', 'conv-t-lang'].forEach(id => document.getElementById(id).onchange = syncTags);
             syncTags();
+            
+            // Initialize Microphones
+            setupMic(1);
+            setupMic(2);
         }
 
+        // --- CONVERSATION LOGIC (JS ONLY) ---
+        async function sendChat(num) {
+            const input = document.getElementById(`chat-in-${num}`);
+            const text = input.value.trim();
+            if (!text) return;
+
+            const sLang = document.getElementById('conv-s-lang').value;
+            const tLang = document.getElementById('conv-t-lang').value;
+            
+            // num 1 (Top Bar) aligns right (src), num 2 (Bottom Bar) aligns left (tar)
+            const srcLang = num === 1 ? sLang : tLang;
+            const tarLang = num === 1 ? tLang : sLang;
+            const bubbleType = num === 1 ? 'src' : 'tar'; 
+
+            document.getElementById('chat-welcome').classList.add('hidden');
+            input.value = "";
+
+            try {
+                const res = await fetch('http://127.0.0.1:5000/translate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, src: srcLang, tar: tarLang })
+                });
+                const data = await res.json();
+                renderPairedBubble(bubbleType, text, data.translation, tarLang);
+            } catch (err) {
+                renderPairedBubble(bubbleType, text, "No translation found", tarLang);
+            }
+        }
+
+        // Map your language names to Browser Voice Codes
+const VOICE_CODES = {
+    "English": "en-US",
+    "Tagalog": "fil-PH",
+    "Cebuano": "fil-PH",
+    "Ilocano": "fil-PH",
+    "Hiligaynon": "fil-PH",
+    "Bicolano": "fil-PH",
+    "Waray": "fil-PH",
+    "Kapampangan": "fil-PH",
+    "Pangasinan": "fil-PH"
+};
+
+// --- 1. MICROPHONE (Speech-to-Text) ---
+function startMic() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+        alert("Your browser does not support Speech Recognition. Please use Chrome.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    const sourceLang = document.getElementById('src-lang').value;
+    
+    // Set the language based on dropdown
+    recognition.lang = VOICE_CODES[sourceLang] || "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    // Visual feedback (change mic color while recording)
+    const micIcon = document.querySelector('button[onclick="startMic()"] i');
+    micIcon.style.color = "var(--flag-red)";
+
+    recognition.start();
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const inputField = document.getElementById('main-input');
+        inputField.value = transcript;
+        
+        // Manually trigger the translation function after voice input
+        handleDashboardTranslate(); 
+    };
+
+    recognition.onend = () => {
+        micIcon.style.color = ""; // Reset color
+    };
+
+    recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        micIcon.style.color = "";
+    };
+}
+
+        // --- 2. HORN (Text-to-Speech) ---
+        function speak(elementId, langSelectId) {
+            const textElement = document.getElementById(elementId);
+            // Handle both <textarea> (value) and <div> (innerText)
+            const text = textElement.value || textElement.innerText;
+            const langName = document.getElementById(langSelectId).value;
+
+            if (!text || text === "Waiting for input...") return;
+
+            // Stop any current speaking
+            window.speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // Set voice/language
+            utterance.lang = VOICE_CODES[langName] || "en-US";
+            
+            // Adjust speed and pitch for natural sound
+            utterance.rate = 0.9; 
+            utterance.pitch = 1;
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function renderPairedBubble(type, original, translated, tarLangName) {
+            const container = document.getElementById('chat-container');
+            const bub = document.createElement('div');
+            
+            // Uses your existing .bubble, .src (right), and .tar (left) CSS classes
+            bub.className = `bubble ${type}`;
+            bub.style.minWidth = "160px";
+
+            // PAIRED LAYOUT STRUCTURE
+            bub.innerHTML = `
+                <div style="font-size: 0.75rem; opacity: 0.8; margin-bottom: 4px; font-weight: 800;">${original}</div>
+                <div style="height: 1px; background: rgba(255,255,255,0.3); margin: 6px 0;"></div>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                    <div style="font-weight: 900; font-size: 1.1rem;">${translated}</div>
+                    <button class="icon-btn" onclick="speak('${translated.replace(/'/g, "\\'")}', '${tarLangName}')" 
+                            style="color: white; width: 28px; height: 28px; padding: 0;">
+                        <i data-lucide="volume-2" size="16"></i>
+                    </button>
+                </div>
+            `;
+
+            container.appendChild(bub);
+            lucide.createIcons();
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // --- MICROPHONE LOGIC ---
+        function setupMic(num) {
+            const micBtn = document.querySelectorAll('.input-bar .icon-btn i[data-lucide="mic"]')[num-1].parentElement;
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+
+            const recognition = new SpeechRecognition();
+            recognition.onresult = (e) => {
+                document.getElementById(`chat-in-${num}`).value = e.results[0][0].transcript;
+                sendChat(num);
+            };
+
+            micBtn.onclick = () => {
+                const lang = document.getElementById(num === 1 ? 'conv-s-lang' : 'conv-t-lang').value;
+                recognition.lang = VOICE_MAP[lang];
+                recognition.start();
+            };
+        }
+
+        // --- TTS LOGIC ---
+        function speak(text, lang) {
+            window.speechSynthesis.cancel();
+            const ut = new SpeechSynthesisUtterance(text);
+            ut.lang = VOICE_MAP[lang];
+            window.speechSynthesis.speak(ut);
+        }
+
+        // --- UTILS (Keep existing) ---
         function nav(id) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.getElementById(id).classList.add('active');
         }
-
         function populateSelects() {
             const ids = ['src-lang', 'tar-lang', 'conv-s-lang', 'conv-t-lang'];
             ids.forEach(id => {
@@ -583,112 +729,45 @@
                 if(id.includes('tar') || id.includes('t-lang')) el.selectedIndex = 1;
             });
         }
-
-        function renderSlangs() {
-            const list = document.getElementById('slang-list');
-            SLANGS.forEach(s => {
-                const item = document.createElement('div');
-                item.className = 'card';
-                item.style.borderLeft = `6px solid var(--flag-gold)`;
-                item.innerHTML = `<div style="font-weight: 900; color: var(--primary); margin-bottom: 4px;">${s.w} • ${s.m}</div>
-                                  <div style="font-size: 0.85rem; opacity: 0.8; line-height: 1.4; color: var(--text)">${s.d}</div>`;
-                list.appendChild(item);
-            });
-        }
-
-        function handleInput(e) {
-            const val = e.target.value.trim();
-            const out = document.getElementById('main-output');
-            const target = document.getElementById('tar-lang').value;
-
-            if(!val) { out.innerText = "Waiting for input..."; return; }
-            
-            out.innerText = val + "...";
-            clearTimeout(transTimer);
-            transTimer = setTimeout(() => {
-                out.innerHTML = `Translated to <span style="color:var(--flag-red)">${target}</span>`;
-            }, 800);
-        }
-
-        function swap() {
-            const s = document.getElementById('src-lang');
-            const t = document.getElementById('tar-lang');
-            const temp = s.selectedIndex;
-            s.selectedIndex = t.selectedIndex;
-            t.selectedIndex = temp;
-            handleInput({ target: document.getElementById('main-input') });
-        }
-
-        function sendChat(num) {
-            const input = document.getElementById(`chat-in-${num}`);
-            const text = input.value.trim();
-            if(!text) return;
-
-            document.getElementById('chat-welcome').classList.add('hidden');
-            const lang = document.getElementById(num === 1 ? 'conv-s-lang' : 'conv-t-lang').value;
-            
-            const container = document.getElementById('chat-container');
-            const bub = document.createElement('div');
-            bub.className = `bubble ${num === 1 ? 'src' : 'tar'}`;
-            
-            // Updated HTML to include a volume button
-            bub.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
-                    <div style="flex: 1;">
-                        <b>${lang.toUpperCase()}</b>
-                        <div class="msg-text">${text}</div>
-                    </div>
-                    <button class="icon-btn" onclick="speak('${text.replace(/'/g, "\\'")}')" style="width: 28px; height: 28px; color: white; padding: 0; flex-shrink: 0;">
-                        <i data-lucide="volume-2" size="16"></i>
-                    </button>
-                </div>`;
-                
-            container.appendChild(bub);
-            
-            // This is important to make the new icon appear
-            lucide.createIcons();
-            
-            input.value = "";
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function speak(text) {
-            // Check if the browser is currently speaking and cancel it
-            window.speechSynthesis.cancel();
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            
-            // Set language to Filipino (works well for Tagalog and most PH dialects)
-            utterance.lang = 'fil-PH'; 
-            utterance.rate = 0.9; // Slightly slower for clarity
-            
-            window.speechSynthesis.speak(utterance);
-        }
-
         function syncTags() {
             const s = document.getElementById('conv-s-lang').value;
             const t = document.getElementById('conv-t-lang').value;
             document.getElementById('tag-1').innerText = CODES[s];
             document.getElementById('tag-2').innerText = CODES[t];
         }
-
+        async function handleDashboardTranslate() {
+            const val = document.getElementById('main-input').value.trim();
+            const out = document.getElementById('main-output');
+            if(!val) { out.innerText = "Waiting for input..."; return; }
+            try {
+                const res = await fetch('http://127.0.0.1:5000/translate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ text: val, src: document.getElementById('src-lang').value, tar: document.getElementById('tar-lang').value })
+                });
+                const data = await res.json();
+                out.innerText = data.translation;
+            } catch(e) { out.innerText = "Error..."; }
+        }
+        function swap() {
+            const s = document.getElementById('src-lang'), t = document.getElementById('tar-lang');
+            [s.selectedIndex, t.selectedIndex] = [t.selectedIndex, s.selectedIndex];
+            handleDashboardTranslate();
+        }
         function toggleTheme() {
             isDark = !isDark;
             localStorage.setItem('salinta-theme-flag', isDark ? 'dark' : 'light');
             applyTheme();
         }
-
         function applyTheme() {
             document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
             lucide.createIcons();
         }
-
         function copy() {
-            const txt = document.getElementById('main-output').innerText;
-            navigator.clipboard.writeText(txt);
-            const toast = document.getElementById('toast');
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2000);
+            navigator.clipboard.writeText(document.getElementById('main-output').innerText);
+            const t = document.getElementById('toast');
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
         }
 
         window.onload = init;
