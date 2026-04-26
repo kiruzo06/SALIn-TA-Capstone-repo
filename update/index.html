@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salin-TA</title>
+    
+    <!-- External Dependencies -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- PHILIPPINE FLAG THEME VARIABLES --- */
+        :root {
+            --flag-blue: #0038A8;
+            --flag-blue-light: #0057D9;
+            --flag-red: #CE1126;
+            --flag-red-light: #E53935;
+            --flag-gold: #FCD116;
+            --flag-gold-light: #FFDF4D;
+            --pure-white: #FFFFFF;
+            --deep-navy: #001B5E;
+            --soft-cream: #FFF8E1;
+            --light-gray: #F4F6F8;
+            
+            /* Logic Mappings */
+            --bg: linear-gradient(135deg, var(--pure-white), var(--light-gray));
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --text: var(--deep-navy);
+            --subtext: #4A5568;
+            --border: rgba(0, 56, 168, 0.15);
+            --primary: var(--flag-blue);
+            --accent: var(--flag-red);
+            
+            /* Gradients */
+            --grad-blue: linear-gradient(135deg, var(--flag-blue), var(--flag-blue-light));
+            --grad-red: linear-gradient(135deg, var(--flag-red), var(--flag-red-light));
+            --grad-gold: linear-gradient(135deg, var(--flag-gold), var(--flag-gold-light));
+
+            --transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            --shadow: 0 10px 30px rgba(0, 56, 168, 0.08);
+            --glass: blur(12px);
+        }
+
+        [data-theme="dark"] {
+            --bg: linear-gradient(135deg, #0B1220, #001B5E);
+            --card-bg: rgba(255, 255, 255, 0.1);
+            --text: #F7FAFC;
+            --subtext: #CBD5E0;
+            --border: rgba(255, 255, 255, 0.15);
+            --primary: var(--flag-gold);
+            --accent: var(--flag-red);
+        }
+
+        /* --- RESET & BASE --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { 
+            background: #00091a; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            overflow: hidden; 
+        }
+
+        /* --- DARK MODE VISIBILITY FOR INPUT BARS --- */
+    [data-theme="dark"] .input-bar input::placeholder {
+        color: #FFFFFF !important;
+        opacity: 0.6 !important; /* Makes grey text look bright white-ish */
+    }
+
+    /* Make the icons brighter in dark mode */
+    [data-theme="dark"] .input-bar .icon-btn {
+        opacity: 1 !important; /* Remove the 0.7 opacity from the mic */
+    }
+
+    /* Change the dark blue icon to a neon/bright blue in dark mode */
+    [data-theme="dark"] .input-bar .icon-btn[style*="var(--flag-blue)"] {
+        color: #5897ff !important; 
+    }
+
+    /* Change the dark red icon to a bright coral/red in dark mode */
+    [data-theme="dark"] .input-bar .icon-btn[style*="var(--flag-red)"] {
+        color: #ff6b6b !important; 
+    }
+
+        /* --- CUSTOM SCROLLBAR STYLE --- */
+        .chat-scroll::-webkit-scrollbar {
+            width: 6px; /* Makes the scrollbar sleek and thin */
+        }
+
+        .chat-scroll::-webkit-scrollbar-track {
+            background: transparent; /* Makes the path invisible */
+        }
+
+        .chat-scroll::-webkit-scrollbar-thumb {
+            background: var(--flag-blue); /* Match the blue from your theme */
+            border-radius: 10px; /* Rounded edges to match your bubbles */
+        }
+
+        /* Change scrollbar color for Dark Mode */
+        [data-theme="dark"] .chat-scroll::-webkit-scrollbar-thumb {
+            background: var(--flag-gold); /* Gold stands out better in dark mode */
+            opacity: 0.5;
+        }
+
+        /* Optional: Add a hover effect to the scrollbar */
+        .chat-scroll::-webkit-scrollbar-thumb:hover {
+            background: var(--flag-red);
+}
+        #app-container {
+            width: 100%;
+            max-width: 420px;
+            height: 90vh;
+            background: var(--bg);
+            position: relative;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+            border-radius: 40px;
+            overflow: hidden;
+            transition: background 0.5s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* --- PAGE SYSTEM --- */
+        .page {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+            opacity: 0;
+            transform: scale(0.98) translateY(10px);
+            pointer-events: none;
+            transition: var(--transition);
+            visibility: hidden;
+        }
+
+        .page.active {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            pointer-events: all;
+            visibility: visible;
+        }
+
+        /* --- SPLASH PAGE --- */
+        #page-splash { 
+            justify-content: center; 
+            align-items: center; 
+            text-align: center; 
+            z-index: 100;
+        }
+        /* --- UPDATED LOGO STYLES --- */
+        .logo-container {
+            width: 280px; /* Size for Splash Screen */
+            height: auto;
+            margin-bottom: 1rem;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.2));
+            animation: float 4s ease-in-out infinite;
+        }
+
+        .logo-container img {
+            width: 100%;
+            height: auto;
+        }
+
+        /* Small version for the header */
+        .header-logo {
+            height: 32px;
+            width: auto;
+            margin-right: 8px;
+        }
+
+        /* Smooth floating animation */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        .app-title { font-size: 2.8rem; font-weight: 900; color: var(--flag-blue); letter-spacing: -1px; }
+        [data-theme="dark"] .app-title { color: var(--flag-gold); }
+        .app-subtitle { color: var(--subtext); font-weight: 500; margin-top: 10px; line-height: 1.5; }
+
+        /* --- HEADER --- */
+        .app-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 0 20px 0;
+        }
+        .header-brand { display: flex; align-items: center; gap: 10px; font-weight: 900; color: var(--flag-blue); }
+        [data-theme="dark"] .header-brand { color: var(--flag-gold); }
+        .header-title h2 { font-size: 1.2rem; color: var(--flag-blue); font-weight: 900; }
+        [data-theme="dark"] .header-title h2 { color: var(--flag-gold); }
+        .header-title p { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--flag-red); font-weight: 800; }
+
+        /* --- COMPONENTS --- */
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: var(--glass);
+            border-radius: 28px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 15px 30px rgba(0, 56, 168, 0.12); }
+
+        .lang-switcher { display: flex; align-items: center; gap: 8px; height: 80px; justify-content: space-between; padding: 10px; }
+         
+        /* --- DROPDOWN (SELECT) DESIGN --- */
+        select {
+            appearance: none;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding:  10px 28px 10px 12px;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            outline: none;
+            flex: 1;
+            min-width: 0;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230038A8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 12px;
+            transition: var(--transition);
+        }
+
+        [data-theme="dark"] select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FCD116' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        select option {
+            background-color: var(--pure-white);
+            color: var(--deep-navy);
+            font-weight: 600;
+        }
+
+        [data-theme="dark"] select option {
+            background-color: #1a202c;
+            color: #ffffff;
+        }
+
+        .badge {
+            background: var(--grad-gold); color: var(--deep-navy);
+            padding: 5px 12px; border-radius: 10px; font-size: 0.7rem; font-weight: 900;
+            box-shadow: 0 4px 10px rgba(252, 209, 22, 0.2);
+            border: none;
+        }
+
+        textarea {
+            width: 100%; height: 100px; background: transparent; border: none;
+            resize: none; color: var(--text); font-size: 1.1rem; padding: 15px 0; outline: none; font-weight: 500;
+        }
+        textarea::placeholder { color: var(--subtext); opacity: 0.6; }
+
+        .output-text { font-size: 1.5rem; font-weight: 900; color: var(--flag-blue); min-height: 80px; line-height: 1.2; }
+        [data-theme="dark"] .output-text { color: var(--flag-gold); }
+
+        /* --- BUTTONS --- */
+        .btn-primary {
+            background: var(--grad-blue); color: white; border: none;
+            padding: 20px; border-radius: 22px; font-weight: 800; font-size: 1rem;
+            cursor: pointer; transition: var(--transition); width: 100%;
+            display: flex; justify-content: center; align-items: center; gap: 10px;
+            box-shadow: 0 8px 20px rgba(0, 56, 168, 0.2);
+        }
+        .btn-primary:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 12px 25px rgba(0, 56, 168, 0.3); }
+        .btn-primary:active { transform: scale(0.98); }
+
+        .btn-circle {
+            width: 44px; height: 44px; border-radius: 50%; border: none;
+            background: var(--grad-red); color: white; cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 5px 15px rgba(206, 17, 38, 0.3);
+            flex-shrink: 0;
+        }
+
+        .icon-btn {
+            background: transparent; border: none; color: var(--flag-blue);
+            width: 44px; height: 44px; cursor: pointer; border-radius: 14px; 
+            display: flex; justify-content: center; align-items: center;
+            transition: 0.2s;
+        }
+        [data-theme="dark"] .icon-btn { color: var(--flag-gold); }
+        .icon-btn:hover { background: var(--border); }
+
+        /* --- CONVERSATION --- */
+        .chat-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 10px 20px; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; }
+        .bubble {
+            max-width: 85%; padding: 15px 20px; border-radius: 22px;
+            font-size: 0.95rem; line-height: 1.5; animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        @keyframes pop { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+        
+        .bubble.src { align-self: flex-end; background: var(--grad-blue); color: white; border-bottom-right-radius: 4px; }
+        .bubble.tar { align-self: flex-start; background: var(--grad-red); color: white; border-bottom-left-radius: 4px; }
+        .bubble b { display: block; font-size: 0.65rem; opacity: 0.9; margin-bottom: 4px; letter-spacing: 1px; color: var(--flag-gold); }
+
+        .chat-input-section { display: flex; flex-direction: column; gap: 10px; padding-top: 15px; }
+        .input-bar {
+            background: var(--card-bg); border-radius: 25px; padding: 4px 10px;
+            display: flex; align-items: center; gap: 8px; border: 1px solid var(--border);
+        }
+        .input-bar input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--text); font-weight: 500; font-size: 0.9rem;}
+        .input-bar input::placeholder { color: var(--subtext); opacity: 0.6; }
+        .lang-tag { background: var(--grad-gold); color: var(--deep-navy); font-weight: 900; font-size: 0.7rem; padding: 6px 10px; border-radius: 12px; min-width: 45px; text-align: center; }
+
+        /* --- SETTINGS --- */
+        .settings-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; color: var(--text); font-weight: 600; }
+        .settings-item span { color: var(--text); }
+        
+        .toggle-bg { width: 56px; height: 30px; background: var(--border); border-radius: 20px; position: relative; cursor: pointer; transition: 0.3s; }
+        [data-theme="dark"] .toggle-bg { background: var(--flag-blue); }
+        .toggle-knob { width: 22px; height: 22px; background: white; border-radius: 50%; position: absolute; top: 4px; left: 4px; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        [data-theme="dark"] .toggle-knob { transform: translateX(26px); background: var(--flag-gold); }
+        
+        input[type="range"] { width: 100%; height: 6px; border-radius: 5px; appearance: none; background: var(--border); outline: none; margin-top: 10px; }
+        input[type="range"]::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; background: var(--flag-gold); border-radius: 50%; cursor: pointer; border: 3px solid var(--flag-blue); }
+
+        /* --- UTILS --- */
+        .toast {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
+            background: var(--grad-blue); color: white; padding: 12px 24px; border-radius: 30px; font-size: 0.85rem;
+            transition: 0.4s; opacity: 0; z-index: 1000; font-weight: 600; border: 1px solid var(--flag-gold);
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .hidden { display: none; }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            #app-container { height: 100vh; border-radius: 0; max-width: none; }
+        }
+
+        @media (max-width: 380px) {
+            .page {
+                padding: 15px; /* Less padding on the edges of the screen */
+            }
+            
+            .lang-tag {
+                font-size: 0.6rem;
+                padding: 4px 6px;
+                min-width: 35px;
+            }
+
+            .input-bar {
+                gap: 4px;
+            }
+
+            .input-bar .icon-btn {
+                width: 32px;
+                height: 32px;
+            }
+            
+            .btn-circle {
+                width: 38px;
+                height: 38px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+       <!-- 1. SPLASH PAGE -->
+        <section id="page-splash" class="page active">
+            <div class="logo-container">
+                <img src="logo.png" alt="Salin-TA Logo">
+            </div>
+            <!-- Note: I kept the title, but since the logo has text, you can remove <h1> if you want -->
+            <h1 class="app-title">Salin-TA</h1>
+            <div style="margin-top: 50px; width: 80%;">
+                <button class="btn-primary" onclick="nav('page-dashboard')">GET STARTED</button>
+            </div>
+        </section>
+
+        <!-- 2. DASHBOARD -->
+        <section id="page-dashboard" class="page">
+            <header class="app-header">
+                <button class="icon-btn" onclick="nav('page-menu')"><i data-lucide="menu"></i></button>
+                <div class="header-brand">
+                     <img src="logo.png" class="header-logo" alt="Logo">
+                    <span>Salin-TA</span>
+                </div>
+                <div style="width: 44px;"></div> <!-- Placeholder for symmetry since theme toggle is removed -->
+            </header>
+
+            <div class="card lang-switcher">
+                <select id="src-lang"></select>
+                <button class="btn-circle" style="flex-shrink: 0;" onclick="swap()"><i data-lucide="arrow-left-right"></i></button>
+                <select id="tar-lang"></select>
+            </div>
+
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="badge">SOURCE TEXT</span>
+                    <div style="display: flex; gap: 5px;">
+                        <button class="icon-btn"><i data-lucide="mic" size="18"></i></button>
+                        <button class="icon-btn"><i data-lucide="volume-2" size="18"></i></button>
+                    </div>
+                </div>
+                <textarea id="main-input" placeholder="Type something to translate..."></textarea>
+            </div>
+
+            <div class="card" style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="badge">TRANSLATION</span>
+                    <div style="display: flex; gap: 5px;">
+                        <button class="icon-btn" onclick="copy()"><i data-lucide="copy" size="18"></i></button>
+                        <button class="icon-btn"><i data-lucide="volume-2" size="18"></i></button>
+                    </div>
+                </div>
+                <div id="main-output" class="output-text" style="margin-top: 15px;">Waiting for input...</div>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-top: 10px;">
+                <button class="btn-primary" style="flex: 1;" onclick="nav('page-conversation')">
+                    <i data-lucide="message-circle"></i> CONVERSATION
+                </button>
+                <button class="btn-primary" style="flex: 1; background: var(--grad-red);" onclick="nav('page-slangs')">
+                    <i data-lucide="book-open"></i> IDIOMS
+                </button>
+            </div>
+        </section>
+
+        <!-- 3. CONVERSATION / INTERPRETER -->
+        <section id="page-conversation" class="page">
+           <header class="app-header" style="flex-direction: column; gap: 15px; padding-bottom: 20px;">
+                <!-- Top Row: Back button and Title centered -->
+                <div style="display: flex; width: 100%; align-items: center; justify-content: space-between;">
+                    <button class="icon-btn" onclick="nav('page-dashboard')">
+                        <i data-lucide="chevron-left"></i>
+                    </button>
+                    
+                    <div class="header-title" style="text-align: center; flex: 1;">
+                        <h2>Conversation</h2>
+                    </div>
+                    
+                    <!-- Empty div to balance the back button and keep title centered -->
+                    <div style="width: 44px;"></div> 
+                </div>
+
+                <!-- Bottom Row: Selection boxes side-by-side like your diagram -->
+                <div style="display: flex; width: 100%; gap: 10px;">
+                    <select id="conv-s-lang" class="header-select" style="width: 100%; flex: 1;"></select>
+                    <select id="conv-t-lang" class="header-select" style="width: 100%; flex: 1;"></select>
+                </div>
+            </header>
+
+            <div id="chat-container" class="chat-scroll">
+                <div id="chat-welcome" class="card" style="text-align: center; opacity: 0.7; font-size: 0.85rem; color: var(--text);">
+                    Speak or type below. Messages are translated instantly using our local database.
+                </div>
+            </div>
+
+            <div class="chat-input-section">
+                <!-- Input 1 (Source) -->
+                <div class="input-bar">
+                    <span id="tag-1" class="lang-tag">TAG</span>
+                    <input type="text" id="chat-in-1" placeholder="Source dialect...">
+                    <!-- Added Microphone Button -->
+                    <button class="icon-btn" style="color: var(--flag-blue); opacity: 0.7;"><i data-lucide="mic"></i></button>
+                    <button class="icon-btn" style="color: var(--flag-blue);" onclick="sendChat(1)"><i data-lucide="send"></i></button>
+                </div>
+                
+                <!-- Input 2 (Target) -->
+                <div class="input-bar">
+                    <span id="tag-2" class="lang-tag">CEB</span>
+                    <input type="text" id="chat-in-2" placeholder="Target dialect...">
+                    <!-- Added Microphone Button -->
+                    <button class="icon-btn" style="color: var(--flag-red); opacity: 0.7;"><i data-lucide="mic"></i></button>
+                    <button class="icon-btn" style="color: var(--flag-red);" onclick="sendChat(2)"><i data-lucide="send"></i></button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. SLANGS -->
+        <section id="page-slangs" class="page">
+            <header class="app-header">
+                <button class="icon-btn" onclick="nav('page-dashboard')"><i data-lucide="chevron-left"></i></button>
+                <div class="header-title"><h2>Pinoy Idioms</h2></div>
+                <div style="width: 44px;"></div>
+            </header>
+            <div id="slang-list" class="chat-scroll">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <!-- 5. MENU / SETTINGS -->
+        <section id="page-menu" class="page">
+            <header class="app-header">
+                <button class="icon-btn" onclick="nav('page-dashboard')"><i data-lucide="chevron-left"></i></button>
+                <div class="header-title"><h2>Settings</h2></div>
+                <div style="width: 44px;"></div>
+            </header>
+            
+            <div class="card">
+                <div class="settings-item">
+                    <span>Dark Theme</span>
+                    <div class="toggle-bg" onclick="toggleTheme()">
+                        <div class="toggle-knob"></div>
+                    </div>
+                </div>
+                <div style="height: 1px; background: var(--border); margin: 15px 0;"></div>
+                <div class="settings-item" style="flex-direction: column; align-items: flex-start;">
+                    <div style="display: flex; justify-content: space-between; width: 100%;">
+                        <span>Text to Speech Volume</span>
+                        <span id="vol-txt" style="color: var(--flag-red); font-weight: 800;">70%</span>
+                    </div>
+                    <input type="range" id="vol-slider" min="0" max="100" value="70">
+                </div>
+            </div>
+
+            <button class="btn-primary" style="background: transparent; color: var(--text); border: 1px solid var(--border); margin-bottom: 10px;">
+                <i data-lucide="info"></i> About Salin-TA
+            </button>
+            
+            <div style="flex: 1;"></div>
+            
+            <button class="btn-primary" style="background: var(--grad-red);" onclick="nav('page-splash')">
+                EXIT APPLICATION
+            </button>
+        </section>
+
+        <div id="toast" class="toast">Copied to clipboard!</div>
+    </div>
+
+    
+    <script>
+       // --- DATA CONFIG ---
+        const LANGUAGES = ["English", "Tagalog", "Cebuano", "Ilocano", "Hiligaynon", "Bicolano", "Waray", "Kapampangan", "Pangasinan"];
+        const CODES = { "English": "ENG", "Tagalog": "TAG", "Cebuano": "CEB", "Ilocano": "ILO", "Hiligaynon": "HIL", "Bicolano": "BIC", "Waray": "WAR", "Kapampangan": "KAP", "Pangasinan": "PAN" };
+        const VOICE_MAP = { "English": "en-US", "Tagalog": "fil-PH", "Cebuano": "fil-PH", "Ilocano": "fil-PH", "Hiligaynon": "fil-PH", "Bicolano": "fil-PH", "Waray": "fil-PH", "Kapampangan": "fil-PH", "Pangasinan": "fil-PH" };
+
+        let isDark = localStorage.getItem('salinta-theme-flag') === 'dark';
+
+        function init() {
+            lucide.createIcons();
+            populateSelects();
+            applyTheme();
+            document.getElementById('main-input').addEventListener('input', handleDashboardTranslate);
+            ['conv-s-lang', 'conv-t-lang'].forEach(id => document.getElementById(id).onchange = syncTags);
+            syncTags();
+            
+            // Initialize Microphones
+            setupMic(1);
+            setupMic(2);
+        }
+
+        // --- CONVERSATION LOGIC (JS ONLY) ---
+        async function sendChat(num) {
+            const input = document.getElementById(`chat-in-${num}`);
+            const text = input.value.trim();
+            if (!text) return;
+
+            const sLang = document.getElementById('conv-s-lang').value;
+            const tLang = document.getElementById('conv-t-lang').value;
+            
+            // num 1 (Top Bar) aligns right (src), num 2 (Bottom Bar) aligns left (tar)
+            const srcLang = num === 1 ? sLang : tLang;
+            const tarLang = num === 1 ? tLang : sLang;
+            const bubbleType = num === 1 ? 'src' : 'tar'; 
+
+            document.getElementById('chat-welcome').classList.add('hidden');
+            input.value = "";
+
+            try {
+                const res = await fetch('http://127.0.0.1:5000/translate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, src: srcLang, tar: tarLang })
+                });
+                const data = await res.json();
+                renderPairedBubble(bubbleType, text, data.translation, tarLang);
+            } catch (err) {
+                renderPairedBubble(bubbleType, text, "No translation found", tarLang);
+            }
+        }
+
+        // Map your language names to Browser Voice Codes
+const VOICE_CODES = {
+    "English": "en-US",
+    "Tagalog": "fil-PH",
+    "Cebuano": "fil-PH",
+    "Ilocano": "fil-PH",
+    "Hiligaynon": "fil-PH",
+    "Bicolano": "fil-PH",
+    "Waray": "fil-PH",
+    "Kapampangan": "fil-PH",
+    "Pangasinan": "fil-PH"
+};
+
+// --- 1. MICROPHONE (Speech-to-Text) ---
+function startMic() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+        alert("Your browser does not support Speech Recognition. Please use Chrome.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    const sourceLang = document.getElementById('src-lang').value;
+    
+    // Set the language based on dropdown
+    recognition.lang = VOICE_CODES[sourceLang] || "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    // Visual feedback (change mic color while recording)
+    const micIcon = document.querySelector('button[onclick="startMic()"] i');
+    micIcon.style.color = "var(--flag-red)";
+
+    recognition.start();
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const inputField = document.getElementById('main-input');
+        inputField.value = transcript;
+        
+        // Manually trigger the translation function after voice input
+        handleDashboardTranslate(); 
+    };
+
+    recognition.onend = () => {
+        micIcon.style.color = ""; // Reset color
+    };
+
+    recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        micIcon.style.color = "";
+    };
+}
+
+        // --- 2. HORN (Text-to-Speech) ---
+        function speak(elementId, langSelectId) {
+            const textElement = document.getElementById(elementId);
+            // Handle both <textarea> (value) and <div> (innerText)
+            const text = textElement.value || textElement.innerText;
+            const langName = document.getElementById(langSelectId).value;
+
+            if (!text || text === "Waiting for input...") return;
+
+            // Stop any current speaking
+            window.speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // Set voice/language
+            utterance.lang = VOICE_CODES[langName] || "en-US";
+            
+            // Adjust speed and pitch for natural sound
+            utterance.rate = 0.9; 
+            utterance.pitch = 1;
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function renderPairedBubble(type, original, translated, tarLangName) {
+            const container = document.getElementById('chat-container');
+            const bub = document.createElement('div');
+            
+            // Uses your existing .bubble, .src (right), and .tar (left) CSS classes
+            bub.className = `bubble ${type}`;
+            bub.style.minWidth = "160px";
+
+            // PAIRED LAYOUT STRUCTURE
+            bub.innerHTML = `
+                <div style="font-size: 0.75rem; opacity: 0.8; margin-bottom: 4px; font-weight: 800;">${original}</div>
+                <div style="height: 1px; background: rgba(255,255,255,0.3); margin: 6px 0;"></div>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                    <div style="font-weight: 900; font-size: 1.1rem;">${translated}</div>
+                    <button class="icon-btn" onclick="speak('${translated.replace(/'/g, "\\'")}', '${tarLangName}')" 
+                            style="color: white; width: 28px; height: 28px; padding: 0;">
+                        <i data-lucide="volume-2" size="16"></i>
+                    </button>
+                </div>
+            `;
+
+            container.appendChild(bub);
+            lucide.createIcons();
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // --- MICROPHONE LOGIC ---
+        function setupMic(num) {
+            const micBtn = document.querySelectorAll('.input-bar .icon-btn i[data-lucide="mic"]')[num-1].parentElement;
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+
+            const recognition = new SpeechRecognition();
+            recognition.onresult = (e) => {
+                document.getElementById(`chat-in-${num}`).value = e.results[0][0].transcript;
+                sendChat(num);
+            };
+
+            micBtn.onclick = () => {
+                const lang = document.getElementById(num === 1 ? 'conv-s-lang' : 'conv-t-lang').value;
+                recognition.lang = VOICE_MAP[lang];
+                recognition.start();
+            };
+        }
+
+        // --- TTS LOGIC ---
+        function speak(text, lang) {
+            window.speechSynthesis.cancel();
+            const ut = new SpeechSynthesisUtterance(text);
+            ut.lang = VOICE_MAP[lang];
+            window.speechSynthesis.speak(ut);
+        }
+
+        // --- UTILS (Keep existing) ---
+        function nav(id) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+        function populateSelects() {
+            const ids = ['src-lang', 'tar-lang', 'conv-s-lang', 'conv-t-lang'];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                LANGUAGES.forEach(l => {
+                    const opt = document.createElement('option');
+                    opt.value = l; opt.innerText = l;
+                    el.appendChild(opt);
+                });
+                if(id.includes('tar') || id.includes('t-lang')) el.selectedIndex = 1;
+            });
+        }
+        function syncTags() {
+            const s = document.getElementById('conv-s-lang').value;
+            const t = document.getElementById('conv-t-lang').value;
+            document.getElementById('tag-1').innerText = CODES[s];
+            document.getElementById('tag-2').innerText = CODES[t];
+        }
+        async function handleDashboardTranslate() {
+            const val = document.getElementById('main-input').value.trim();
+            const out = document.getElementById('main-output');
+            if(!val) { out.innerText = "Waiting for input..."; return; }
+            try {
+                const res = await fetch('http://127.0.0.1:5000/translate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ text: val, src: document.getElementById('src-lang').value, tar: document.getElementById('tar-lang').value })
+                });
+                const data = await res.json();
+                out.innerText = data.translation;
+            } catch(e) { out.innerText = "Error..."; }
+        }
+        function swap() {
+            const s = document.getElementById('src-lang'), t = document.getElementById('tar-lang');
+            [s.selectedIndex, t.selectedIndex] = [t.selectedIndex, s.selectedIndex];
+            handleDashboardTranslate();
+        }
+        function toggleTheme() {
+            isDark = !isDark;
+            localStorage.setItem('salinta-theme-flag', isDark ? 'dark' : 'light');
+            applyTheme();
+        }
+        function applyTheme() {
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            lucide.createIcons();
+        }
+        function copy() {
+            navigator.clipboard.writeText(document.getElementById('main-output').innerText);
+            const t = document.getElementById('toast');
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
