@@ -1,42 +1,96 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 import sqlite3
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from translator import translate, smart_translate, DB_PATH
 
 app = Flask(__name__)
-CORS(app) # Allows the HTML file to talk to this server
+CORS(app)
 
-def get_translation(text, src, tar):
-    try:
-        conn = sqlite3.connect('translations.db')
-        cur = conn.cursor()
-            
-        # COLLATE NOCASE makes the search ignore Capital Letters
-        query = "SELECT translated FROM translations WHERE source=? AND src_lang=? AND tar_lang=? COLLATE NOCASE"
-        cur.execute(query, (text.strip().lower(), src, tar))
-        
-        result = cur.fetchone()
-        conn.close()
-        
-        return result[0] if result else "No translation found"
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-@app.route('/')
-def home():
-    return "Salin-TA Backend is Running!"
-
+# --- ROUTER FOR DASHBOARD TRANSLATION ---
 @app.route('/translate', methods=['POST'])
-def translate():
+def handle_translate():
     data = request.json
-    if not data or 'text' not in data:
-        return jsonify({"translation": "Invalid Input"}), 400
-        
-    text = data['text']
-    src = data['src']
-    tar = data['tar']
+    user_text = data.get('text', '').strip()
+    src_lang = data.get('src', '').capitalize()
+    tar_lang = data.get('tar', '').capitalize()
 
-    translated = get_translation(text, src, tar)
-    return jsonify({"translation": translated})
+    if not user_text:
+        return jsonify({"translation": ""})
+
+    # Call the new Smart Hybrid logic
+    result = smart_translate(user_text, src_lang, tar_lang)
+
+    return jsonify({"translation": result})
+
+# --- ROUTE FOR IDIOMS & SLANGS ---
+@app.route('/idioms', methods=['GET'])
+def get_idioms():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+
+        # Fetch idioms
+        idioms = conn.execute('SELECT phrase, meaning, english_equivalent FROM idioms').fetchall()
+        idioms_list = [dict(row) for row in idioms]
+        for item in idioms_list:
+            item['english'] = item.pop('english_equivalent')
+            item['type'] = 'idiom'
+
+        # Fetch slangs
+        try:
+            slangs = conn.execute('SELECT phrase, meaning, english_equivalent FROM slangs').fetchall()
+            slangs_list = [dict(row) for row in slangs]
+            for item in slangs_list:
+                item['english'] = item.pop('english_equivalent')
+                item['type'] = 'slang'
+        except:
+            slangs_list = []
+
+        conn.close()
+        return jsonify(idioms_list + slangs_list)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- ROUTE FOR COMMON PHRASES ---
+@app.route('/phrases', methods=['GET'])
+def get_phrases():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute('''
+            SELECT english, tagalog, bisaya, ilocano,
+                   hiligaynon, bicolano, waray, kapampangan, pangasinan
+            FROM common_phrases
+        ''').fetchall()
+        conn.close()
+        return jsonify([dict(row) for row in rows])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- ROUTE TO CHECK IF WORD IS SLANG OR IDIOM ---
+@app.route('/check-special', methods=['POST'])
+def check_special():
+    try:
+        data = request.json
+        word = data.get('word', '').strip().lower()
+
+        conn = sqlite3.connect(DB_PATH)
+
+        # Check slang
+        is_slang = conn.execute(
+            'SELECT 1 FROM slangs WHERE LOWER(phrase) = ?', (word,)
+        ).fetchone() is not None
+
+        # Check idiom
+        is_idiom = conn.execute(
+            'SELECT 1 FROM idioms WHERE LOWER(phrase) = ?', (word,)
+        ).fetchone() is not None
+
+        conn.close()
+        return jsonify({"is_slang": is_slang, "is_idiom": is_idiom})
+    except:
+        return jsonify({"is_slang": False, "is_idiom": False})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
